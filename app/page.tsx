@@ -1,63 +1,114 @@
-import Image from "next/image";
+"use client";
+
+import { type ChangeEventHandler, type DragEventHandler, useCallback, useState } from "react";
 
 export default function Home() {
+  const [files, setFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFiles = useCallback((incoming: FileList | null) => {
+    if (!incoming) return;
+
+    const fileArray = Array.from(incoming);
+    setFiles((prev) => {
+      const names = new Set(prev.map((file) => file.name + file.lastModified));
+      const newFiles = fileArray.filter((file) => !names.has(file.name + file.lastModified));
+      return [...prev, ...newFiles];
+    });
+  }, []);
+
+  const onDrop: DragEventHandler<HTMLLabelElement> = useCallback(
+    (event) => {
+      event.preventDefault();
+      setIsDragging(false);
+      handleFiles(event.dataTransfer.files);
+    },
+    [handleFiles],
+  );
+
+  const onDragOver: DragEventHandler<HTMLLabelElement> = useCallback((event) => {
+    event.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave: DragEventHandler<HTMLLabelElement> = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const onInputChange: ChangeEventHandler<HTMLInputElement> = useCallback(
+    (event) => {
+      handleFiles(event.target.files);
+      event.target.value = "";
+    },
+    [handleFiles],
+  );
+
+  const removeFile = useCallback((index: number) => {
+    setFiles((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen bg-black text-zinc-100">
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-6 py-16">
+        <div className="w-full rounded-3xl border border-zinc-800 bg-zinc-900/60 p-10 shadow-2xl shadow-black/40 backdrop-blur">
+          <header className="mb-10 text-center">
+            <p className="text-sm uppercase tracking-[0.4em] text-purple-300">PodcastGen</p>
+            <h1 className="mt-4 text-4xl font-semibold text-zinc-50">Genera tu podcast en minutos</h1>
+            <p className="mt-3 text-sm text-zinc-400">
+              Sube tus guiones o capítulos en formato de texto y comienza a producir tu próximo podcast.
+            </p>
+          </header>
+
+          <label
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onDragLeave={onDragLeave}
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
+              isDragging ? "border-purple-400 bg-purple-500/10" : "border-zinc-700 bg-zinc-900"
+            }`}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <input type="file" multiple onChange={onInputChange} className="hidden" />
+            <span className="rounded-full bg-purple-500/20 px-3 py-1 text-xs font-medium uppercase tracking-wider text-purple-200">
+              Arrastra y suelta tus archivos
+            </span>
+            <span className="mt-4 text-xl font-semibold text-zinc-100">o haz clic para seleccionarlos</span>
+            <span className="mt-2 text-sm text-zinc-400">Formato soportado: cualquier archivo de texto o audio.</span>
+          </label>
+
+          <section className="mt-8 space-y-3">
+            {files.length === 0 ? (
+              <p className="text-center text-sm text-zinc-500">Aún no has añadido archivos.</p>
+            ) : (
+              <ul className="space-y-3">
+                {files.map((file, index) => (
+                  <li
+                    key={`${file.name}-${file.lastModified}`}
+                    className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-zinc-100">{file.name}</span>
+                      <span className="text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-sm font-semibold text-zinc-300 transition hover:bg-red-500 hover:text-white"
+                      aria-label={`Eliminar ${file.name}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <button
+            type="button"
+            className="mt-10 w-full rounded-2xl bg-purple-500 py-4 text-center text-lg font-semibold text-white transition hover:bg-purple-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300"
           >
-            Documentation
-          </a>
+            Generar Podcast
+          </button>
         </div>
       </main>
     </div>
