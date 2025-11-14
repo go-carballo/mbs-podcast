@@ -5,6 +5,9 @@ import { type ChangeEventHandler, type DragEventHandler, useCallback, useState }
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [dialogue, setDialogue] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const handleFiles = useCallback((incoming: FileList | null) => {
     if (!incoming) return;
@@ -46,6 +49,45 @@ export default function Home() {
   const removeFile = useCallback((index: number) => {
     setFiles((prev) => prev.filter((_, idx) => idx !== index));
   }, []);
+
+  const generatePodcast = useCallback(async () => {
+    if (files.length === 0 || isGenerating) return;
+
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    setIsGenerating(true);
+    setError(null);
+    setDialogue("");
+
+    try {
+      const response = await fetch("/api/generate-podcast", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const { error: message } = await response.json().catch(() => ({ error: "Error desconocido" }));
+        throw new Error(message || "Error al generar el podcast");
+      }
+
+      const payload = (await response.json()) as { dialogue?: string };
+
+      if (!payload.dialogue) {
+        throw new Error("La respuesta no contiene el diálogo del podcast");
+      }
+
+      setDialogue(payload.dialogue);
+    } catch (cause) {
+      console.error(cause);
+      const message = cause instanceof Error ? cause.message : "Error al generar el podcast";
+      setError(message);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [files, isGenerating]);
 
   return (
     <div className="min-h-screen bg-black text-zinc-100">
@@ -105,10 +147,25 @@ export default function Home() {
 
           <button
             type="button"
-            className="mt-10 w-full rounded-2xl bg-purple-500 py-4 text-center text-lg font-semibold text-white transition hover:bg-purple-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300"
+            onClick={generatePodcast}
+            disabled={isGenerating || files.length === 0}
+            className="mt-10 w-full rounded-2xl bg-purple-500 py-4 text-center text-lg font-semibold text-white transition hover:bg-purple-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
           >
-            Generar Podcast
+            {isGenerating ? "Generando podcast..." : "Generar Podcast"}
           </button>
+
+          {(error || dialogue) && (
+            <section className="mt-8 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
+              {error ? (
+                <p className="text-sm text-red-400">{error}</p>
+              ) : (
+                <>
+                  <h2 className="text-lg font-semibold text-zinc-100">Diálogo generado</h2>
+                  <p className="whitespace-pre-wrap text-sm text-zinc-300">{dialogue}</p>
+                </>
+              )}
+            </section>
+          )}
         </div>
       </main>
     </div>
