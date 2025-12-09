@@ -2,12 +2,14 @@
 
 import { type ChangeEventHandler, type DragEventHandler, useCallback, useState } from "react";
 
+type FetchError = Error & { status?: number };
+
 export default function Home() {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [dialogue, setDialogue] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
 
   const handleFiles = useCallback((incoming: FileList | null) => {
     if (!incoming) return;
@@ -70,7 +72,9 @@ export default function Home() {
 
       if (!response.ok) {
         const { error: message } = await response.json().catch(() => ({ error: "Error desconocido" }));
-        throw new Error(message || "Error al generar el podcast");
+        const err = new Error(message || "Error al generar el podcast") as FetchError;
+        err.status = response.status;
+        throw err;
       }
 
       const payload = (await response.json()) as { dialogue?: string };
@@ -83,11 +87,14 @@ export default function Home() {
     } catch (cause) {
       console.error(cause);
       const message = cause instanceof Error ? cause.message : "Error al generar el podcast";
-      setError(message);
+      const status = cause instanceof Error && typeof (cause as FetchError).status === "number" ? (cause as FetchError).status : undefined;
+      setError({ message, status });
     } finally {
       setIsGenerating(false);
     }
   }, [files, isGenerating]);
+
+  const showQuotaHelp = error?.status === 429 || error?.message.toLowerCase().includes("cuota de openai");
 
   return (
     <div className="min-h-screen bg-black text-zinc-100">
@@ -157,7 +164,19 @@ export default function Home() {
           {(error || dialogue) && (
             <section className="mt-8 space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-6">
               {error ? (
-                <p className="text-sm text-red-400">{error}</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-red-400">{error.message}</p>
+                  {showQuotaHelp && (
+                    <div className="rounded-xl border border-purple-400/40 bg-purple-500/10 p-4 text-left text-sm text-purple-100">
+                      <p className="font-semibold text-purple-200">¿Estás viendo este error con frecuencia?</p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-purple-100/90">
+                        <li>Revisa que tu clave de OpenAI sea válida y esté configurada en los ajustes del proyecto.</li>
+                        <li>Confirma en el panel de facturación de OpenAI que tu plan tenga crédito disponible.</li>
+                        <li>Vuelve a intentarlo en unos minutos en caso de que sea un límite temporal de la API.</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <>
                   <h2 className="text-lg font-semibold text-zinc-100">Diálogo generado</h2>
