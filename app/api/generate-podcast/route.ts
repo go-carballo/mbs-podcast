@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import OpenAI, { toFile } from "openai";
+import OpenAI, { APIError, toFile } from "openai";
 
 export const runtime = "nodejs";
 
@@ -87,6 +87,20 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error(error);
+
+    if (error instanceof APIError) {
+      const isQuotaError = error.code === "insufficient_quota" || error.status === 429;
+
+      return NextResponse.json(
+        {
+          error: isQuotaError
+            ? "Se ha excedido la cuota de OpenAI. Por favor, revisa tu plan y detalles de facturación."
+            : "Ocurrió un error al comunicarse con OpenAI.",
+        },
+        { status: isQuotaError ? 429 : error.status ?? 500 }
+      );
+    }
+
     return NextResponse.json({ error: "Ocurrió un error al comunicarse con OpenAI." }, { status: 500 });
   }
 }
